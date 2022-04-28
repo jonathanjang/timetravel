@@ -1,16 +1,23 @@
 package api
 
 import (
+    "database/sql"
+
 	"github.com/gorilla/mux"
 	"github.com/temelpa/timetravel/service"
+    _ "github.com/mattn/go-sqlite3"
 )
 
 type API struct {
 	records service.RecordService
+    db *sql.DB
 }
 
-func NewAPI(records service.RecordService) *API {
-	return &API{records}
+func NewAPI(records service.RecordService, db *sql.DB) *API {
+	return &API{
+            records: records,
+            db: db,
+    }
 }
 
 // generates all api routes

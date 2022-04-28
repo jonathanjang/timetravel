@@ -5,10 +5,12 @@ import (
 	"log"
 	"net/http"
 	"time"
+    "database/sql"
 
 	"github.com/gorilla/mux"
 	"github.com/temelpa/timetravel/api"
 	"github.com/temelpa/timetravel/service"
+    _ "github.com/mattn/go-sqlite3"
 )
 
 // logError logs all non-nil errors
@@ -18,12 +20,42 @@ func logError(err error) {
 	}
 }
 
-func main() {
+func initDb()(*sql.DB, error) {
+    db, err := sql.Open("sqlite3", "./records.db")
+    if err != nil {
+        logError(err)
+        return nil, err
+    }
+
+    const create string = `
+        CREATE TABLE IF NOT EXISTS records (
+            id INTEGER NOT NULL PRIMARY KEY,
+            rid INTEGER NOT NULL,
+            key TEXT,
+            value TEXT);
+    `
+    _, err = db.Exec(create);
+
+    if err != nil {
+        logError(err)
+        return nil, err
+    }
+
+    return db, nil
+}
+
+
+func main()() {
 	router := mux.NewRouter()
 
 	service := service.NewInMemoryRecordService()
-	api := api.NewAPI(&service)
+    db, err := initDb()
+    if err != nil {
+        logError(err)
+        return
+    }
 
+	api := api.NewAPI(&service, db)
 	apiRoute := router.PathPrefix("/api/v1").Subrouter()
 	apiRoute.Path("/health").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		err := json.NewEncoder(w).Encode(map[string]bool{"ok": true})
@@ -41,4 +73,5 @@ func main() {
 
 	log.Printf("listening on %s", address)
 	log.Fatal(srv.ListenAndServe())
+    defer db.Close()
 }
