@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/gorilla/mux"
+	"github.com/temelpa/timetravel/service"
 )
 
 // GET /records/{id}
@@ -22,8 +23,9 @@ func (a *API) GetRecords(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	record, err := a.records.GetRecord(
-		ctx,
+	record, err := service.GetRecord(
+        ctx,
+		a.db,
 		int(idNumber),
 	)
 	if err != nil {

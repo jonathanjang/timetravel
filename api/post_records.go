@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 
@@ -35,37 +34,56 @@ func (a *API) PostRecords(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// first retrieve the record
-	record, err := a.records.GetRecord(
+    getRecord, _ := service.GetRecord(
 		ctx,
+        a.db,
 		int(idNumber),
 	)
 
-	if !errors.Is(err, service.ErrRecordDoesNotExist) { // record exists
-		record, err = a.records.UpdateRecord(ctx, int(idNumber), body)
-	} else { // record does not exist
+    responseRecord := entity.Record{}
+    responseRecord.ID = int(idNumber)
+    responseRecord.Data = map[string]string{}
 
-		// exclude the delete updates
-		recordMap := map[string]string{}
-		for key, value := range body {
-			if value != nil {
-				recordMap[key] = *value
-			}
-		}
+    // Start by pre-adding all entries from the GET Query to response
+    for key, value := range getRecord.Data {
+        responseRecord.Data[ key ] = value
+    }
 
-		record = entity.Record{
-			ID:   int(idNumber),
-			Data: recordMap,
-		}
-		err = a.records.CreateRecord(ctx, record)
+    for key, value := range body {
+        oldVal, ok := getRecord.Data[key]
+        if !ok { // insert record to table
+            a.IncrementEid(); // increment counter for Id in db
+            err = service.AddRecordRow(
+                ctx,
+                a.db,
+                int(idNumber),
+                a.eid,
+                key,
+                value,
+            )
+            responseRecord.Data[key] = *value
+        } else { // update record
+            err = service.UpdateOrDeleteRecord(
+                ctx,
+                a.db,
+                int(idNumber),
+                key,
+                oldVal,
+                value,
+            )
+            if _,ok := responseRecord.Data[key]; ok && value == nil {
+                delete(responseRecord.Data, key)
+            } else {
+                responseRecord.Data[key] = *value
+            }
+        }
+        if err != nil {
+            errInWriting := writeError(w, ErrInternal.Error(), http.StatusInternalServerError)
+	        logError(err)
+	        logError(errInWriting)
+		    return
+	    }
 	}
-
-	if err != nil {
-		errInWriting := writeError(w, ErrInternal.Error(), http.StatusInternalServerError)
-		logError(err)
-		logError(errInWriting)
-		return
-	}
-
-	err = writeJSON(w, record, http.StatusOK)
+    err = writeJSON(w, responseRecord, http.StatusOK)
 	logError(err)
 }

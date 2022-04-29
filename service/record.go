@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+    "database/sql"
 
 	"github.com/temelpa/timetravel/entity"
 )
@@ -14,19 +15,21 @@ var ErrRecordAlreadyExists = errors.New("record already exists")
 // Implements method to get, create, and update record data.
 type RecordService interface {
 
-	// GetRecord will retrieve an record.
+	// GetRecord will retrieve all records with the passed in id value (rid)
 	GetRecord(ctx context.Context, id int) (entity.Record, error)
 
-	// CreateRecord will insert a new record.
-	//
-	// If it a record with that id already exists it will fail.
-	CreateRecord(ctx context.Context, record entity.Record) error
+	// AddRecordRow will insert a new record.
+    //
+    // rid param is the record id which is the record that is being added to
+    // eid is a counter for each id in the records table
+    // key, value are added to the records table
+	AddRecordRow(ctx context.Context, db *sql.DB, rid int, eid int, key string, value *string) error
 
-	// UpdateRecord will change the internal `Map` values of the record if they exist.
-	// if the update[key] is null it will delete that key from the record's Map.
-	//
-	// UpdateRecord will error if id <= 0 or the record does not exist with that id.
-	UpdateRecord(ctx context.Context, id int, updates map[string]*string) (entity.Record, error)
+    // UpdateOrDeleteRecord takes in the recordID, key, and value and checks if
+    // an update or delete is required. If the value field is null, the entry
+    // in the database is deleted. Otherwise, an update is performed on the data
+	UpdateOrDeleteRecord(ctx context.Context, db *sql.DB, rid int, key string, prevValue string,
+                 newValue *string) error
 }
 
 // InMemoryRecordService is an in-memory implementation of RecordService.
@@ -39,45 +42,75 @@ func NewInMemoryRecordService() InMemoryRecordService {
 		data: map[int]entity.Record{},
 	}
 }
+// TODO: match error checking with non sql skeleton
+func GetRecord(ctx context.Context, db *sql.DB, id int) (entity.Record, error) {
+    rows, err := db.Query("SELECT rid, key, value FROM records WHERE rid=?", id)
+    if err != nil {
+        return entity.Record{}, err
+    }
 
-func (s *InMemoryRecordService) GetRecord(ctx context.Context, id int) (entity.Record, error) {
-	record := s.data[id]
-	if record.ID == 0 {
-		return entity.Record{}, ErrRecordDoesNotExist
-	}
+    record := entity.Record{}
+    record.ID = id
+    record.Data = map[string]string{}
+    for rows.Next() {
+        r := entity.RecordRow{}
+        err := rows.Scan(&r.ID, &r.Key, &r.Value)
+        if err != nil {
+            return entity.Record{}, err
+        }
+        record.Data[r.Key] = r.Value
+    }
 
-	record = record.Copy() // copy is necessary so modifations to the record don't change the stored record
+    if len(record.Data) == 0 {
+        return entity.Record{}, ErrRecordDoesNotExist
+    }
+
 	return record, nil
 }
 
-func (s *InMemoryRecordService) CreateRecord(ctx context.Context, record entity.Record) error {
-	id := record.ID
-	if id <= 0 {
-		return ErrRecordIDInvalid
-	}
+func AddRecordRow(ctx context.Context, db *sql.DB, rid int, eid int, key string, value *string) error {
+    // rid is the id for the record (X in /api/v1/records/X)
+    // eid is the id for the individual entry within the db (this does not get returned to the user)
+    stmt, err := db.Prepare("INSERT INTO records VALUES(?,?,?,?);")
+    if err != nil {
+        return err
+    }
+    res, err := stmt.Exec(eid, rid, key, value)
 
-	existingRecord := s.data[id]
-	if existingRecord.ID != 0 {
-		return ErrRecordAlreadyExists
-	}
+    if err != nil {
+        return err
+    }
+    if _, err := res.LastInsertId(); err != nil {
+        return err
+    }
 
-	s.data[id] = record
-	return nil
+    stmt.Close()
+    return nil
 }
 
-func (s *InMemoryRecordService) UpdateRecord(ctx context.Context, id int, updates map[string]*string) (entity.Record, error) {
-	entry := s.data[id]
-	if entry.ID == 0 {
-		return entity.Record{}, ErrRecordDoesNotExist
-	}
+func UpdateOrDeleteRecord(ctx context.Context, db *sql.DB, rid int, key string, prevValue string, newValue *string) error {
+    if newValue != nil {
+        stmt, err := db.Prepare("UPDATE records set key=?, value=? WHERE rid=? AND key=? AND value=?")
+        if err != nil {
+            return err
+        }
+        _, err = stmt.Exec(key, newValue, rid, key, prevValue)
+        if err != nil {
+            return err
+        }
 
-	for key, value := range updates {
-		if value == nil { // deletion update
-			delete(entry.Data, key)
-		} else {
-			entry.Data[key] = *value
-		}
-	}
+        stmt.Close()
+    } else {
+        stmt, err := db.Prepare("DELETE from records WHERE rid=? AND key=? AND value=?")
+        if err != nil {
+            return err
+        }
+        _, err = stmt.Exec(rid, key, prevValue)
+        if err != nil {
+            return err
+        }
 
-	return entry.Copy(), nil
+        stmt.Close()
+    }
+    return nil
 }

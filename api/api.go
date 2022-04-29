@@ -4,20 +4,23 @@ import (
     "database/sql"
 
 	"github.com/gorilla/mux"
-	"github.com/temelpa/timetravel/service"
     _ "github.com/mattn/go-sqlite3"
 )
 
 type API struct {
-	records service.RecordService
+    eid int
     db *sql.DB
 }
 
-func NewAPI(records service.RecordService, db *sql.DB) *API {
+func NewAPI(db *sql.DB) *API {
 	return &API{
-            records: records,
+            eid: 0,
             db: db,
     }
+}
+
+func (a *API) IncrementEid() {
+    a.eid++
 }
 
 // generates all api routes

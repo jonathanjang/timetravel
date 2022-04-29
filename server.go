@@ -9,7 +9,6 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/temelpa/timetravel/api"
-	"github.com/temelpa/timetravel/service"
     _ "github.com/mattn/go-sqlite3"
 )
 
@@ -27,6 +26,7 @@ func initDb()(*sql.DB, error) {
         return nil, err
     }
 
+    // TODO: add indexing via rid
     const create string = `
         CREATE TABLE IF NOT EXISTS records (
             id INTEGER NOT NULL PRIMARY KEY,
@@ -45,17 +45,16 @@ func initDb()(*sql.DB, error) {
 }
 
 
-func main()() {
+func main() {
 	router := mux.NewRouter()
 
-	service := service.NewInMemoryRecordService()
     db, err := initDb()
     if err != nil {
         logError(err)
         return
     }
 
-	api := api.NewAPI(&service, db)
+	api := api.NewAPI(db)
 	apiRoute := router.PathPrefix("/api/v1").Subrouter()
 	apiRoute.Path("/health").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		err := json.NewEncoder(w).Encode(map[string]bool{"ok": true})
