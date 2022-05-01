@@ -27,7 +27,7 @@ func initDb()(*sql.DB, error) {
     }
 
     // TODO: add indexing via rid
-    const create string = `
+    create := `
         CREATE TABLE IF NOT EXISTS records (
             id INTEGER NOT NULL PRIMARY KEY,
             rid INTEGER NOT NULL,
@@ -35,6 +35,17 @@ func initDb()(*sql.DB, error) {
             value TEXT);
     `
     _, err = db.Exec(create);
+
+    if err != nil {
+        logError(err)
+        return nil, err
+    }
+
+    index := `
+        CREATE INDEX recordId
+        ON records (rid);
+    `
+    _, err = db.Exec(index);
 
     if err != nil {
         logError(err)
