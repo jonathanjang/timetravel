@@ -39,16 +39,25 @@ func initDb()(*sql.DB, error) {
         logError(err)
         return nil, err
     }
-
-    index := `
-        CREATE INDEX recordId
-        ON records (rid);
+    // Check to see if index exists.
+    indexSearch := `
+        PRAGMA index_list(records);
     `
-    _, err = db.Exec(index);
+    rows, err := db.Query(indexSearch);
 
-    if err != nil {
-        logError(err)
-        return nil, err
+    // If index does not exist, add one to index recordId and id to
+    // improve the performance of the query
+    if !rows.Next() {
+        index := `
+            CREATE INDEX recordId
+            ON records (rid,id);
+        `
+        _, err = db.Exec(index);
+
+        if err != nil {
+            logError(err)
+            return nil, err
+        }
     }
 
     return db, nil

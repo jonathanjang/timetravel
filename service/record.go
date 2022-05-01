@@ -16,6 +16,8 @@ var ErrRecordAlreadyExists = errors.New("record already exists")
 type RecordService interface {
 
 	// GetRecord will retrieve all records with the passed in id value (rid)
+    // Searches the records table for all records for a given rid value
+    // Returns a map of the most up to date assignment of (key,value) pairs
 	GetRecord(ctx context.Context, id int) (entity.Record, error)
 
 	// AddRecordRow will insert a new record.
@@ -24,12 +26,6 @@ type RecordService interface {
     // eid is a counter for each id in the records table
     // key, value are added to the records table
 	AddRecordRow(ctx context.Context, db *sql.DB, rid int, eid int, key string, value *string) error
-
-    // UpdateOrDeleteRecord takes in the recordID, key, and value and checks if
-    // an update or delete is required. If the value field is null, the entry
-    // in the database is deleted. Otherwise, an update is performed on the data
-	UpdateOrDeleteRecord(ctx context.Context, db *sql.DB, rid int, key string, prevValue string,
-                 newValue *string) error
 }
 
 // InMemoryRecordService is an in-memory implementation of RecordService.
@@ -42,9 +38,8 @@ func NewInMemoryRecordService() InMemoryRecordService {
 		data: map[int]entity.Record{},
 	}
 }
-// TODO: match error checking with non sql skeleton
 func GetRecord(ctx context.Context, db *sql.DB, id int) (entity.Record, error) {
-    rows, err := db.Query("SELECT rid, key, value FROM records WHERE rid=?", id)
+    rows, err := db.Query("SELECT id, rid, key, value FROM records WHERE rid=? ORDER BY id DESC", id)
     if err != nil {
         return entity.Record{}, err
     }
@@ -54,15 +49,32 @@ func GetRecord(ctx context.Context, db *sql.DB, id int) (entity.Record, error) {
     record.Data = map[string]string{}
     for rows.Next() {
         r := entity.RecordRow{}
-        err := rows.Scan(&r.ID, &r.Key, &r.Value)
+        err := rows.Scan(&r.ID, &r.RID, &r.Key, &r.Value)
+
         if err != nil {
             return entity.Record{}, err
         }
-        record.Data[r.Key] = r.Value
+        _, ok := record.Data[r.Key]
+        // Only store the last value for a (key, value) pair since the Query orders the
+        // results by last update entry first
+        if !ok {
+            if r.Value.Valid {
+                record.Data[r.Key] = r.Value.String
+            } else {
+                record.Data[r.Key] = ""
+            }
+        }
     }
 
     if len(record.Data) == 0 {
         return entity.Record{}, ErrRecordDoesNotExist
+    }
+
+    // Delete all the entries with null values in the response
+    for key, value := range record.Data {
+        if value == "" {
+            delete(record.Data, key)
+        }
     }
 
 	return record, nil
@@ -88,29 +100,3 @@ func AddRecordRow(ctx context.Context, db *sql.DB, rid int, eid int, key string,
     return nil
 }
 
-func UpdateOrDeleteRecord(ctx context.Context, db *sql.DB, rid int, key string, prevValue string, newValue *string) error {
-    if newValue != nil {
-        stmt, err := db.Prepare("UPDATE records set key=?, value=? WHERE rid=? AND key=? AND value=?")
-        if err != nil {
-            return err
-        }
-        _, err = stmt.Exec(key, newValue, rid, key, prevValue)
-        if err != nil {
-            return err
-        }
-
-        stmt.Close()
-    } else {
-        stmt, err := db.Prepare("DELETE from records WHERE rid=? AND key=? AND value=?")
-        if err != nil {
-            return err
-        }
-        _, err = stmt.Exec(rid, key, prevValue)
-        if err != nil {
-            return err
-        }
-
-        stmt.Close()
-    }
-    return nil
-}

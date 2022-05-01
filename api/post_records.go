@@ -50,32 +50,24 @@ func (a *API) PostRecords(w http.ResponseWriter, r *http.Request) {
     }
 
     for key, value := range body {
-        oldVal, ok := getRecord.Data[key]
-        if !ok { // insert record to table
-            a.IncrementEid(); // increment counter for Id in db
-            err = service.AddRecordRow(
-                ctx,
-                a.db,
-                int(idNumber),
-                a.eid,
-                key,
-                value,
-            )
+        a.IncrementEid(); // increment counter for Id in db
+        err = service.AddRecordRow(
+            ctx,
+            a.db,
+            int(idNumber),
+            a.eid,
+            key,
+            value,
+        )
+        // Don't add null values to the response
+        if value != nil {
             responseRecord.Data[key] = *value
-        } else { // update record
-            err = service.UpdateOrDeleteRecord(
-                ctx,
-                a.db,
-                int(idNumber),
-                key,
-                oldVal,
-                value,
-            )
-            if _,ok := responseRecord.Data[key]; ok && value == nil {
-                delete(responseRecord.Data, key)
-            } else {
-                responseRecord.Data[key] = *value
-            }
+        }
+        // if the value changed to null, remove it from the response
+        if _,ok := responseRecord.Data[key]; ok && value == nil {
+            delete(responseRecord.Data, key)
+        } else if value != nil {
+            responseRecord.Data[key] = *value
         }
         if err != nil {
             errInWriting := writeError(w, ErrInternal.Error(), http.StatusInternalServerError)

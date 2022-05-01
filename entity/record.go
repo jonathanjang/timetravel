@@ -1,5 +1,9 @@
 package entity
 
+import (
+    "database/sql"
+)
+
 type Record struct {
 	ID   int               `json:"id"`
 	Data map[string]string `json:"data"`
@@ -7,8 +11,9 @@ type Record struct {
 
 type RecordRow struct {
     ID      int            `json:"id"`
+    RID     int            `json:"rid"`
     Key     string         `json:"key"`
-    Value   string         `json:"value"`
+    Value   sql.NullString `json:"value"`
 }
 
 func (d *Record) Copy() Record {

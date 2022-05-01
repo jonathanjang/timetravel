@@ -1,17 +1,18 @@
 import requests
 import unittest
+import pdb
 
 class BasicTest( unittest.TestCase ):
 
     def verifyGetRecord( self, url, recordId, statusCode, expectedContent ):
         r = requests.get( url + str( recordId ) )
-        self.assertTrue( r.status_code, statusCode )
-        self.assertTrue( r.content, expectedContent )
+        self.assertEqual( r.status_code, statusCode )
+        self.assertEqual( r.content, expectedContent )
 
     def verifyPostRecord( self, url, payload, recordId, statusCode, expectedContent ):
         r = requests.post( url + str( recordId ), json=payload ) 
-        self.assertTrue( r.status_code, statusCode )
-        self.assertTrue( r.content, expectedContent )
+        self.assertEqual( r.status_code, statusCode )
+        self.assertEqual( r.content, expectedContent )
 
     def testServer( self ):
         # Make sure to clean out .db file before running test!
