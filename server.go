@@ -26,7 +26,6 @@ func initDb()(*sql.DB, error) {
         return nil, err
     }
 
-    // TODO: add indexing via rid
     create := `
         CREATE TABLE IF NOT EXISTS records (
             id INTEGER NOT NULL PRIMARY KEY,
