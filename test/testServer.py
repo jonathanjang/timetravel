@@ -16,7 +16,8 @@ class BasicTest( unittest.TestCase ):
 
     def testServer( self ):
         # Make sure to clean out .db file before running test!
-        url = 'http://127.0.0.1:8000/api/v1/records/'
+        # Also make sure the server is running in the background "go run server.go"
+        url = 'http://127.0.0.1:8000/api/v2/records/'
 
         # Verify that a GET with nothing in the database returns an error
         self.verifyGetRecord( url, 1, 400, '{"error":"record of id 1 does not exist"}\n' )

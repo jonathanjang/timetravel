@@ -14,18 +14,21 @@ var ErrRecordAlreadyExists = errors.New("record already exists")
 
 // Implements method to get, create, and update record data.
 type RecordService interface {
+    // RecordService method for v1 endpoint
 
-	// GetRecord will retrieve all records with the passed in id value (rid)
-    // Searches the records table for all records for a given rid value
-    // Returns a map of the most up to date assignment of (key,value) pairs
+	// GetRecord will retrieve an record.
 	GetRecord(ctx context.Context, id int) (entity.Record, error)
 
-	// AddRecordRow will insert a new record.
-    //
-    // rid param is the record id which is the record that is being added to
-    // eid is a counter for each id in the records table
-    // key, value are added to the records table
-	AddRecordRow(ctx context.Context, db *sql.DB, rid int, eid int, key string, value *string) error
+	// CreateRecord will insert a new record.
+	//
+	// If it a record with that id already exists it will fail.
+	CreateRecord(ctx context.Context, record entity.Record) error
+
+	// UpdateRecord will change the internal `Map` values of the record if they exist.
+	// if the update[key] is null it will delete that key from the record's Map.
+	//
+	// UpdateRecord will error if id <= 0 or the record does not exist with that id.
+	UpdateRecord(ctx context.Context, id int, updates map[string]*string) (entity.Record, error)
 }
 
 // InMemoryRecordService is an in-memory implementation of RecordService.
@@ -38,7 +41,54 @@ func NewInMemoryRecordService() InMemoryRecordService {
 		data: map[int]entity.Record{},
 	}
 }
-func GetRecord(ctx context.Context, db *sql.DB, id int) (entity.Record, error) {
+
+func (s *InMemoryRecordService) GetRecord(ctx context.Context, id int) (entity.Record, error) {
+	record := s.data[id]
+	if record.ID == 0 {
+		return entity.Record{}, ErrRecordDoesNotExist
+	}
+
+	record = record.Copy() // copy is necessary so modifations to the record don't change the stored record
+	return record, nil
+}
+
+func (s *InMemoryRecordService) CreateRecord(ctx context.Context, record entity.Record) error {
+	id := record.ID
+	if id <= 0 {
+		return ErrRecordIDInvalid
+	}
+
+	existingRecord := s.data[id]
+	if existingRecord.ID != 0 {
+		return ErrRecordAlreadyExists
+	}
+
+	s.data[id] = record
+	return nil
+}
+
+func (s *InMemoryRecordService) UpdateRecord(ctx context.Context, id int, updates map[string]*string) (entity.Record, error) {
+	entry := s.data[id]
+	if entry.ID == 0 {
+		return entity.Record{}, ErrRecordDoesNotExist
+	}
+
+	for key, value := range updates {
+		if value == nil { // deletion update
+			delete(entry.Data, key)
+		} else {
+			entry.Data[key] = *value
+		}
+	}
+
+	return entry.Copy(), nil
+}
+
+// GetRecordV2 serves the v2 endpoint
+// will retrieve all records with the passed in id value (rid)
+// Searches the records table for all records for a given rid value
+// Returns a map of the most up to date assignment of (key,value) pairs
+func GetRecordV2(ctx context.Context, db *sql.DB, id int) (entity.Record, error) {
     rows, err := db.Query("SELECT id, rid, key, value FROM records WHERE rid=? ORDER BY id DESC", id)
     if err != nil {
         return entity.Record{}, err
@@ -80,9 +130,12 @@ func GetRecord(ctx context.Context, db *sql.DB, id int) (entity.Record, error) {
 	return record, nil
 }
 
-func AddRecordRow(ctx context.Context, db *sql.DB, rid int, eid int, key string, value *string) error {
-    // rid is the id for the record (X in /api/v1/records/X)
-    // eid is the id for the individual entry within the db (this does not get returned to the user)
+// AddRecordRowV2 serves the v2 endpoint
+// Inserts a new record
+// rid param is the record id which is the record that is being added to (X in /api/v1/records/X)
+// eid is a counter for each id in the records sql database (not returned to the user)
+// key, value are added to the records table
+func AddRecordRowV2(ctx context.Context, db *sql.DB, rid int, eid int, key string, value *string) error {
     stmt, err := db.Prepare("INSERT INTO records VALUES(?,?,?,?);")
     if err != nil {
         return err

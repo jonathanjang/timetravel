@@ -9,6 +9,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/temelpa/timetravel/api"
+	"github.com/temelpa/timetravel/service"
     _ "github.com/mattn/go-sqlite3"
 )
 
@@ -73,13 +74,22 @@ func main() {
         return
     }
 
-	api := api.NewAPI(db)
+	service := service.NewInMemoryRecordService()
+	apiv1 := api.NewAPI(&service)
 	apiRoute := router.PathPrefix("/api/v1").Subrouter()
 	apiRoute.Path("/health").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		err := json.NewEncoder(w).Encode(map[string]bool{"ok": true})
 		logError(err)
 	})
-	api.CreateRoutes(apiRoute)
+	apiv1.CreateRoutesV1(apiRoute)
+
+	apiv2 := api.NewAPIv2(db)
+	apiRoutev2 := router.PathPrefix("/api/v2").Subrouter()
+	apiRoutev2.Path("/health").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		err := json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+		logError(err)
+	})
+	apiv2.CreateRoutesV2(apiRoutev2)
 
 	address := "127.0.0.1:8000"
 	srv := &http.Server{
