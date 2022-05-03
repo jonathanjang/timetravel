@@ -130,6 +130,44 @@ func GetRecordV2(ctx context.Context, db *sql.DB, id int) (entity.Record, error)
 	return record, nil
 }
 
+// GetRecordForKeyV2 serves the v2 endpoint
+// will retrieve all values for a given rid, key pair
+// Searches the records table for all records for a given rid, key pair
+// Returns a map (or list) of all values for rid, key pair from most recent to least recent
+func GetRecordForKeyV2(ctx context.Context, db *sql.DB, id int, key string) (entity.RecordValues, error) {
+    rows, err := db.Query("SELECT id, rid, key, value FROM records WHERE rid=? AND key =? ORDER BY id DESC", id, key)
+    if err != nil {
+        return entity.RecordValues{}, err
+    }
+
+    record := entity.RecordValues{}
+    record.Key = key
+    record.RID = id
+    record.Data = map[int]string{}
+    i := 0
+    for rows.Next() {
+        r := entity.RecordRow{}
+        err := rows.Scan(&r.ID, &r.RID, &r.Key, &r.Value)
+
+        if err != nil {
+            return entity.RecordValues{}, err
+        }
+        if r.Value.Valid {
+            record.Data[i] = r.Value.String
+        } else {
+            record.Data[i] = ""
+        }
+        i += 1
+    }
+
+    if len(record.Data) == 0 {
+        return entity.RecordValues{}, ErrRecordDoesNotExist
+    }
+
+	return record, nil
+}
+
+
 // AddRecordRowV2 serves the v2 endpoint
 // Inserts a new record
 // rid param is the record id which is the record that is being added to (X in /api/v1/records/X)

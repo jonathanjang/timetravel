@@ -42,5 +42,8 @@ func (a *APIv2) IncrementEid() {
 func (a *APIv2) CreateRoutesV2(routes *mux.Router) {
 	routes.Path("/records/{id}").HandlerFunc(a.GetRecordsV2).Methods("GET")
 	routes.Path("/records/{id}").HandlerFunc(a.PostRecordsV2).Methods("POST")
+
+    // new route to look at history of an rid, key pair
+	routes.Path("/records/{id}/{key}").HandlerFunc(a.GetRecordForKeyV2).Methods("GET")
 }
 

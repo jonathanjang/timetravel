@@ -9,6 +9,11 @@ class BasicTest( unittest.TestCase ):
         self.assertEqual( r.status_code, statusCode )
         self.assertEqual( r.content, expectedContent )
 
+    def verifyGetValuesRecord( self, url, recordId, key, statusCode, expectedContent ):
+        r = requests.get( url + str( recordId ) + "/" + key )
+        self.assertEqual( r.status_code, statusCode )
+        self.assertEqual( r.content, expectedContent )
+
     def verifyPostRecord( self, url, payload, recordId, statusCode, expectedContent ):
         r = requests.post( url + str( recordId ), json=payload ) 
         self.assertEqual( r.status_code, statusCode )
@@ -63,6 +68,24 @@ class BasicTest( unittest.TestCase ):
         self.verifyPostRecord( url, d, 2, 200, '{"id":2,"data":{}}\n' )
         self.verifyGetRecord( url, 2, 200, '{"id":2,"data":{}}\n' )
 
+        # Test for GET on /records/{id}/{key} endpoint 
+        # Add some more values to for a given key and verify functionality
+        # of the new query on id, key
+        d = { "foo": "34" }
+        self.verifyPostRecord( url, d, 2, 200, '{"id":2,"data":{"foo":"34"}}\n' )
+        self.verifyGetRecord( url, 2, 200, '{"id":2,"data":{"foo":"34"}}\n' )
 
+        d = { "foo": "12" }
+        self.verifyPostRecord( url, d, 2, 200, '{"id":2,"data":{"foo":"12"}}\n' )
+        self.verifyGetRecord( url, 2, 200, '{"id":2,"data":{"foo":"12"}}\n' )
+
+        d = { "foo": "78" }
+        self.verifyPostRecord( url, d, 2, 200, '{"id":2,"data":{"foo":"78"}}\n' )
+        self.verifyGetRecord( url, 2, 200, '{"id":2,"data":{"foo":"78"}}\n' )
+
+        self.verifyGetValuesRecord( url, 2, "foo", 200, 
+            '{"rid":2,"key":"foo","data":{"0":"78","1":"12","2":"34","3":"","4":"baz","5":"bar"}}\n' )
+
+        
 if __name__ == '__main__':
     unittest.main()
